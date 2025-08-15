@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LeoIsCool9321 for Executive Officer or Commanding Officer!</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        background: linear-gradient(135deg, #4f8cff, #6ad2ff);
+        margin: 0;
+        padding: 0;
+        color: #333;
+    }
+    .container {
+        max-width: 700px;
+        background: rgba(255, 255, 255, 0.95);
+        margin: 50px auto;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        animation: fadeIn 0.8s ease-in;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    h1 {
+        text-align: center;
+        color: #2c3e50;
+    }
+    p {
+        text-align: center;
+        font-size: 1.1em;
+    }
+    .sign-box {
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    input[type="text"] {
+        flex: 1;
+        padding: 12px;
+        border-radius: 8px 0 0 8px;
+        border: 1px solid #ccc;
+        font-size: 1em;
+    }
+    button {
+        padding: 12px 20px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 0 8px 8px 0;
+        font-size: 1em;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    button:hover {
+        background: #218838;
+    }
+    #signed-msg {
+        text-align: center;
+        color: #28a745;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    h2 {
+        margin-top: 30px;
+        color: #2c3e50;
+    }
+    ul {
+        list-style-type: none;
+        padding: 0;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    li {
+        background: #f4f4f4;
+        margin: 5px 0;
+        padding: 10px;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📝 LeoIsCool9321 for Executive Officer or Commanding Officer!</h1>
+    <p><strong>Signatures:</strong> <span id="count">0</span></p>
+
+    <div class="sign-box">
+        <input type="text" id="username" placeholder="Enter your Roblox username">
+        <button onclick="signPetition()">Sign</button>
+    </div>
+
+    <div id="signed-msg"></div>
+
+    <h2>Supporters:</h2>
+    <ul id="supporterList"></ul>
+</div>
+
+<script>
+    const supporterList = document.getElementById('supporterList');
+    const countDisplay = document.getElementById('count');
+    const signedMsg = document.getElementById('signed-msg');
+    const inputField = document.getElementById('username');
+
+    // Load existing data from localStorage
+    let supporters = JSON.parse(localStorage.getItem('supporters') || '[]');
+    let alreadySigned = localStorage.getItem('signed') === 'true';
+    updateList();
+
+    if (alreadySigned) {
+        inputField.disabled = true;
+        document.querySelector('button').disabled = true;
+        signedMsg.textContent = "✅ You've already signed this petition. Thank you!";
+    }
+
+    function signPetition() {
+        if (alreadySigned) return;
+
+        const username = inputField.value.trim();
+        if (username === '') {
+            alert("Please enter a Roblox username.");
+            return;
+        }
+        if (supporters.includes(username)) {
+            alert("This username has already signed.");
+            return;
+        }
+        supporters.push(username);
+        localStorage.setItem('supporters', JSON.stringify(supporters));
+        localStorage.setItem('signed', 'true');
+        updateList();
+
+        inputField.value = '';
+        inputField.disabled = true;
+        document.querySelector('button').disabled = true;
+        signedMsg.textContent = "✅ You've signed the petition. Thank you for your support!";
+    }
+
+    function updateList() {
+        supporterList.innerHTML = '';
+        supporters.forEach(user => {
+            const li = document.createElement('li');
+            li.textContent = user;
+            supporterList.appendChild(li);
+        });
+        countDisplay.textContent = supporters.length;
+    }
+</script>
+
+</body>
+</html>
