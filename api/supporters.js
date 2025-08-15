@@ -1,89 +1,69 @@
 // /api/supporters.js
+import { put, list } from '@vercel/blob';
+
+const PATH = 'petition/supporters.json';
+
+async function getBlobUrl() {
+  const { blobs } = await list({ prefix: PATH, limit: 1 });
+  return blobs && blobs.length ? blobs[0].url : null;
+}
+
+async function readSupporters() {
+  const url = await getBlobUrl();
+  if (!url) return [];
+  const r = await fetch(url);
+  if (!r.ok) return [];
+  const data = await r.json().catch(() => ({}));
+  if (Array.isArray(data)) return data.filter(v => typeof v === 'string');
+  if (Array.isArray(data.supporters)) return data.supporters.filter(v => typeof v === 'string');
+  return [];
+}
+
+async function writeSupporters(names) {
+  const clean = Array.from(new Set(names.map(s => String(s)))); // dedupe exact matches
+  const body = JSON.stringify({ supporters: clean, updatedAt: new Date().toISOString() });
+  await put(PATH, body, {
+    access: 'public',
+    addRandomSuffix: false,
+    contentType: 'application/json'
+  });
+  return clean;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
 
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-
-  if (!url || !token) {
-    res.status(500).send(JSON.stringify({ error: 'kv_not_configured' }));
-    return;
-  }
-
-  // Minimal Upstash-style REST helper
-  const kv = {
-    async cmd(path, method = 'GET') {
-      const r = await fetch(`${url}/${path}`, {
-        method,
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await r.json().catch(() => ({}));
-      return data.result;
-    }
-  };
-
   try {
     if (req.method === 'GET') {
-      const raw = await kv.cmd('lrange/supporters:list/0/-1');
-      const list = Array.isArray(raw) ? raw : [];
-      // Stored as JSON strings; parse safely and return names only for this UI
-      const names = list.map((s) => {
-        try { return JSON.parse(s).name; } catch { return String(s); }
-      });
-      res.status(200).send(JSON.stringify({ supporters: names }));
-      return;
+      const supporters = await readSupporters();
+      return res.status(200).send(JSON.stringify({ supporters }));
     }
 
     if (req.method === 'POST') {
-      // Basic IP rate limit: 5 per 30s per IP
-      const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim();
-      const rlKey = `rate:${ip || 'unknown'}`;
-      const count = await kv.cmd(`incr/${encodeURIComponent(rlKey)}`);
-      if (count === 1) await kv.cmd(`expire/${encodeURIComponent(rlKey)}/30`);
-      if (count > 5) {
-        res.status(429).send(JSON.stringify({ error: 'rate_limited' }));
-        return;
-      }
-
-      // Read body
       let body = '';
       for await (const chunk of req) body += chunk;
       const data = JSON.parse(body || '{}');
 
-      const rawName = (data.username || '').toString().trim();
-      const name = rawName.replace(/\s+/g, ' ');
-      if (!name) {
-        res.status(400).send(JSON.stringify({ error: 'username_required' }));
-        return;
-      }
-      if (name.length > 50) {
-        res.status(400).send(JSON.stringify({ error: 'username_too_long' }));
-        return;
-      }
+      const raw = (data.username || '').toString().trim();
+      const name = raw.replace(/\s+/g, ' ');
+      if (!name) return res.status(400).send(JSON.stringify({ error: 'username_required' }));
+      if (name.length > 50) return res.status(400).send(JSON.stringify({ error: 'username_too_long' }));
 
-      // Dedupe globally by normalized name
-      const norm = name.toLowerCase();
-      const added = await kv.cmd(`sadd/supporters:set/${encodeURIComponent(norm)}`);
-      if (added === 1) {
-        const entry = JSON.stringify({ name, ts: Date.now() });
-        await kv.cmd(`lpush/supporters:list/${encodeURIComponent(entry)}`);
-        await kv.cmd('ltrim/supporters:list/0/999'); // keep last 1000
-      }
+      // Load current list
+      const current = await readSupporters();
 
-      // Return the updated name-only list for your UI
-      const raw = await kv.cmd('lrange/supporters:list/0/-1');
-      const names = (Array.isArray(raw) ? raw : []).map((s) => {
-        try { return JSON.parse(s).name; } catch { return String(s); }
-      });
+      // Case-insensitive dedupe
+      const exists = new Set(current.map(s => s.toLowerCase()));
+      if (!exists.has(name.toLowerCase())) current.push(name);
 
-      res.status(200).send(JSON.stringify({ ok: true, supporters: names }));
-      return;
+      const supporters = await writeSupporters(current);
+      return res.status(200).send(JSON.stringify({ ok: true, supporters }));
     }
 
     res.setHeader('Allow', 'GET, POST');
-    res.status(405).send(JSON.stringify({ error: 'method_not_allowed' }));
+    return res.status(405).send(JSON.stringify({ error: 'method_not_allowed' }));
   } catch (e) {
-    res.status(500).send(JSON.stringify({ error: 'server_error' }));
+    return res.status(500).send(JSON.stringify({ error: 'server_error' }));
   }
 }
